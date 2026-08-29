@@ -78,10 +78,13 @@ the actual redscript compiler or the game yet - no `deploy.js`/`launch.js` run s
 - **Environment readiness check**: the Lua mod gated on the environment resource path not
   containing "v002" (unless it also contains "nova_city_master", a fix already present in the
   live deployed Lua copy at `Z:\...\AdaptiveTrafficHeadlights\init.lua` but *not* in the stale
-  project-source copy under `bin/` that the initial port was read from). Replicated in
-  `LightLogic.reds` via `envDef.path.ToString()` - `worldEnvironmentDefinition extends
-  CResource`, which carries `path: ResRef` as a plain field, and Codeware adds
-  `ResRef.ToString()`. One unresolved uncertainty here - see Open items.
+  project-source copy under `bin/` that the initial port was read from). That path-string check
+  turned out to be inaccessible in redscript (`CResource.path` is not `public` - see Open items)
+  and, on reflection, unnecessary here: it existed only because CET's Lua `onUpdate` hook runs
+  even at the main menu with no real session loaded, so the Lua mod had no other way to tell a
+  placeholder/pregame environment from a real one. This port's `OnPlayerAttach` hook only fires
+  once a real game session has attached a player, so `LightLogic.reds` instead gates on
+  `ArraySize(envDef.weatherStates) > 0`, which is both accessible and sufficient.
 - **Custom `Wrap24` modulo helper**: the base game's native `ModF()` (core/math/scalar.script)
   returns 0 for any non-positive input, which would misbehave on the negative intermediate
   values this logic legitimately produces (e.g. around the `lastLightDecisionTime` sentinel of
@@ -89,14 +92,40 @@ the actual redscript compiler or the game yet - no `deploy.js`/`launch.js` run s
 - **Everything is a hard dependency** - no `@if(ModuleExists(...))` guards, matching how DVRCF
   and RedWindows already hard-require each other and Codeware.
 
+## Fixed by first in-game test (2026-08-29)
+
+- **`FileSystem.GetStorage("AdaptiveTrafficHeadlights")` denied - wrong casing**: the very
+  first real launch (after the `CResource.path` fix above let scripts compile) showed
+  `Settings.reds`/`Data.reds`/`WeatherStateData.reds` all logging "exists but is not a JSON
+  object/array" for files that don't actually exist on disk. `Z:\...\red4ext\logs\redfilesystem-*.log`
+  had the real error: `Name of storage "AdaptiveTrafficHeadlights" is not allowed.` RedFileSystem
+  validates the storage name against the mod's actual `r6/scripts/` folder name, case-sensitively
+  (confirmed by comparing against `DigitalVixenCore`/`RedscriptConfigFramework`, both granted -
+  their storage name strings match their PascalCase script folders exactly). At the time, this
+  project's script folder was lowercase `adaptivetrafficheadlights` while all three
+  `GetStorage()` calls passed `"AdaptiveTrafficHeadlights"`. Every storage call was therefore
+  silently denied all session - `Exists()` came back as the enum's zero value
+  (`FileSystemStatus.True`, a false positive), and `GetFile(...).ReadAsJson()`/`WriteJson(...)`
+  on the denied handle came back undefined/no-op. Net effect: settings/color data were never
+  read or written, and a hand-placed `weatherStates.json` in storages was never overwritten
+  either (confirmed byte-for-byte intact via its unchanged mtime and a plain `JSON.parse`) even
+  though the log claimed to discover and save 80 fresh states. Fixed by renaming the script
+  folder itself to `r6/scripts/AdaptiveTrafficHeadlights` (PascalCase, matching every other
+  mod's convention and the storage name already used in code) rather than lowercasing the
+  storage name - see File Structure above. `Logging.reds`'s
+  `RedLog.AppendLevel("AdaptiveTrafficHeadlights", ...)` calls needed no change - they already
+  produced a working log file even before this fix, so RedLogger evidently doesn't enforce the
+  same folder-name check.
+
 ## Open items (things worth a second look, not yet resolved by testing)
 
-1. **`CResource.path` field visibility** (`LightLogic.reds`, `TryGetWeatherData`) - declared as
-   bare `native let path: ResRef;` in Codeware's header with no explicit `public`/`private`.
-   Codeware's author does use explicit `public` elsewhere in the same file when intended, so
-   this could be implicitly private and fail to compile from another module. Fallback if so:
-   gate readiness on `ArraySize(envDef.weatherStates) > 0` instead (what was there before this
-   was found to be fixable).
+1. ~~**`CResource.path` field visibility**~~ - **Resolved**: confirmed at compile time that
+   `path` is not accessible (bare `native let path: ResRef;` in Codeware's header, no `public`).
+   `TryGetWeatherData` now gates readiness on `ArraySize(envDef.weatherStates) > 0` instead of
+   the Lua mod's "v002"/"nova_city_master" path-string heuristic. That heuristic existed only
+   because CET's `onUpdate` hook ran even at the main menu with no real session; this port's
+   `OnPlayerAttach` hook only fires for a real, loaded game session, so a non-null envDef with
+   populated weatherStates is already sufficient.
 2. **`RandRange(min, max)` inclusivity** (`VehicleLights.reds`) - assumed inclusive on both
    ends for picking a random color/vehicle-category entry (no visible native body to confirm).
    If actually exclusive on the top end, the last item in a list just never gets picked - minor,

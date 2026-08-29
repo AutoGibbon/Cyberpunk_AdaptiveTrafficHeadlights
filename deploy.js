@@ -42,11 +42,10 @@ async function deploy() {
 		console.log(`Source folder: ${SOURCE_R6_FOLDER}`);
 
 		// Delete target directories
-		const scriptsTarget = path.join(DEPLOYMENT_TARGET, "r6", "scripts", "adaptivetrafficheadlights");
+		const scriptsTarget = path.join(DEPLOYMENT_TARGET, "r6", "scripts", "AdaptiveTrafficHeadlights");
 
 		console.log("\n--- Deleting existing files ---");
 		deleteDirectory(scriptsTarget);
-		deleteDirectory(storagesTarget);
 
 		// Copy r6 folder to deployment target
 		console.log("\n--- Copying files ---");

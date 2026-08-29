@@ -195,23 +195,16 @@ public class ATH_LightController extends ScriptableSystem {
       return;
     }
 
-    // Same "is this a real, loaded environment" gate as the Lua mod: reject a
-    // path containing "v002" (a placeholder/pregame environment) unless it also
-    // contains "nova_city_master" (Nova City Weather Probability's own valid
-    // environment happens to match "v002" too). worldEnvironmentDefinition
-    // extends CResource, which carries its own resource path as a plain field
-    // (CResource.path: ResRef); Codeware adds ResRef.ToString() to read it back.
+    // The Lua mod had to guess whether a real environment was loaded by string-matching
+    // its resource path (rejecting "v002" placeholder/pregame environments) because CET's
+    // onUpdate hook runs even at the main menu, with no real session. We don't have that
+    // problem: OnPlayerAttach only fires once a real game session has attached a player, so
+    // a non-null envDef with populated weatherStates already means a loaded, real environment.
+    // (CResource.path itself is not accessible here - it's declared without `public` in
+    // Codeware's header - so the old path-string check isn't an option regardless.)
     if !this.m_foundEnv {
-      let pathStr: String = envDef.path.ToString();
-      if StrLen(pathStr) > 0 {
-        let pathLower: String = StrLower(pathStr);
-        let hasV002: Bool = StrContains(pathLower, "v002");
-        let hasNovaCity: Bool = StrContains(pathLower, "nova_city_master");
-        if !hasV002 || hasNovaCity {
-          this.m_foundEnv = true;
-        } else {
-          ATHLogWarn(s"Invalid/placeholder environment detected: \(pathStr)");
-        }
+      if ArraySize(envDef.weatherStates) > 0 {
+        this.m_foundEnv = true;
       }
     }
 

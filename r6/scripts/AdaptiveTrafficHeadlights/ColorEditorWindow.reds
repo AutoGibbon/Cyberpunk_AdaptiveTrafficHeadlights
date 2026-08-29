@@ -195,7 +195,7 @@ public abstract class ATH_ColorEditorWindow {
       let isCurrent: Bool = Equals(currentState, state.name);
       let label: String = isCurrent ? s"\(state.name) (current)" : state.name;
 
-      if win.CollapsingHeader(headerId, label) {
+      if win.CollapsingHeader(headerId, label, true) {
         win.Indent();
 
         let onId: CName = ATH_ColorEditorWindow.NameFrom(s"ws_\(state.name)_on");

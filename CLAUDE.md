@@ -8,7 +8,7 @@ The rewrite exists because five utility mods now cover everything CET/Lua used t
 
 ## File Structure
 
-- `r6/scripts/adaptivetrafficheadlights/` - RedScript source files (module `AdaptiveTrafficHeadlights`, classes prefixed `ATH_`)
+- `r6/scripts/AdaptiveTrafficHeadlights/` - RedScript source files (module `AdaptiveTrafficHeadlights`, classes prefixed `ATH_`)
 - `bin/` - the old CET Lua mod, reference only, not part of the build
 
 ## Dependencies (hard requirements)
@@ -98,7 +98,7 @@ When the user says "deploy and launch" (or equivalent), run this immediately, wi
 node deploy.js && node launch.js
 ```
 
-- `deploy.js` deletes `r6/scripts/adaptivetrafficheadlights` and `r6/storages/AdaptiveTrafficHeadlights` under the deployment target, then copies the entire local `./r6` folder over the target's `r6` folder (this also overwrites any non-mod files under the target's `r6/`, not just this mod's subfolders).
+- `deploy.js` deletes `r6/scripts/AdaptiveTrafficHeadlights` under the deployment target, then copies the entire local `./r6` folder over the target's `r6` folder (this also overwrites any non-mod files under the target's `r6/`, not just this mod's subfolders). It deliberately does NOT delete `r6/storages/AdaptiveTrafficHeadlights` — that holds persisted settings/color/weather-state JSON and must survive redeploys.
 - `launch.js` starts Cyberpunk 2077 via its shortcut, fire-and-forget (no wait for the game to actually launch).
 - Pre-authorization covers only this exact two-step command as documented here. Any variation (different target, different scope, force-push-style destructive ops elsewhere) still needs explicit confirmation per the general safety rules above.
 
