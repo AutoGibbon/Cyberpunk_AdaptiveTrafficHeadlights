@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Headlight Color Editor</title>
+		<style>
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+				max-width: 1920px;
+				margin: 0 auto;
+				padding: 20px;
+				background: #24292e; /* ImGui background */
+				color: #ececec; /* ImGui text */
+			}
+
+			.container {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 30px;
+			}
+
+			.json-editor {
+				background: #1e2326; /* ImGui child background */
+				padding: 20px;
+				border-radius: 8px;
+				border: 1px solid #414951; /* ImGui border */
+			}
+
+			.json-editor h2 {
+				margin-top: 0;
+				color: #cc9933; /* ImGui primary */
+			}
+
+			#jsonInput {
+				width: 98%;
+				height: 800px;
+				background: #30363d; /* ImGui frame */
+				color: #ececec; /* ImGui text */
+				border: 1px solid #414951; /* ImGui border */
+				border-radius: 4px;
+				padding: 15px;
+				font-family: "Monaco", "Menlo", monospace;
+				font-size: 12px;
+				line-height: 1.4;
+			}
+
+			#jsonInput:focus {
+				background: #383f47; /* ImGui frame hovered */
+				outline: none;
+				border-color: #cc9933; /* ImGui primary */
+			}
+
+			.color-preview {
+				background: #1e2326; /* ImGui child background */
+				padding: 20px;
+				border-radius: 8px;
+				border: 1px solid #414951; /* ImGui border */
+			}
+
+			.color-preview h2 {
+				margin-top: 0;
+				color: #cc9933; /* ImGui primary */
+			}
+
+			.color-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+				gap: 15px;
+				margin-bottom: 20px;
+			}
+
+			.color-item {
+				text-align: center;
+				background: #30363d; /* ImGui frame */
+				padding: 10px;
+				border-radius: 6px;
+				border: 1px solid #414951; /* ImGui border */
+				transition: background 0.2s;
+			}
+
+			.color-item:hover {
+				background: #383f47; /* ImGui frame hovered */
+			}
+
+			.color-name {
+				font-size: 12px;
+				font-weight: bold;
+				margin-bottom: 8px;
+				color: #ececec; /* ImGui text */
+			}
+
+			.color-swatch {
+				width: 100%;
+				height: 160px;
+				border-radius: 4px;
+				margin-bottom: 8px;
+				border: 2px solid #30363d; /* ImGui frame */
+			}
+
+			.color-values {
+				font-size: 10px;
+				color: #999999; /* ImGui text dark */
+				line-height: 1.2;
+			}
+
+			.controls {
+				grid-column: 1 / -1;
+				display: flex;
+				gap: 15px;
+				align-items: center;
+			}
+
+			button {
+				background: #30363d; /* ImGui button */
+				color: #ececec; /* ImGui text */
+				border: 1px solid #414951; /* ImGui border */
+				padding: 12px 20px;
+				border-radius: 6px;
+				font-weight: bold;
+				cursor: pointer;
+				transition: all 0.2s;
+			}
+
+			button:hover {
+				background: #383f47; /* ImGui button hovered */
+			}
+
+			button:active {
+				background: #cc9933; /* ImGui button active */
+			}
+
+			.update-btn {
+				background: #4d9999; /* ImGui accent teal */
+			}
+
+			.update-btn:hover {
+				background: #66b3b3; /* ImGui accent teal hovered */
+			}
+
+			.update-btn:active {
+				background: #3d7a7a; /* Darker teal for active */
+			}
+
+			h1 {
+				color: #cc9933; /* ImGui primary */
+				text-align: center;
+				margin-bottom: 10px;
+			}
+
+			h3 {
+				color: #ececec; /* ImGui text */
+				margin-top: 20px;
+			}
+			span {
+				display: block;
+				color: #999999;
+				margin-bottom: 10px;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>Adaptive Traffic Headlights Color Preview/Editor Thingy</h1>
+
+		<span>
+			You can define as many (at least one) light configs as you want, and save them in vehicleSettings.json. Just ensure to
+			update the headlightCategories section with the new names or things will explode.
+		</span>
+
+		<div class="container">
+			<div class="json-editor">
+				<h2>JSON Editor</h2>
+				<textarea id="jsonInput" placeholder="Edit your color data here..."></textarea>
+				<button class="update-btn" onclick="updateColors()">Update Preview</button>
+			</div>
+
+			<div class="color-preview">
+				<h2>Color Preview</h2>
+				<div class="color-grid" id="colorGrid">
+					<!-- Colors will be populated here -->
+				</div>
+			</div>
+		</div>
+
+		<script>
+			const defaultColors = {
+						"warmWhite": { "Alpha": 50, "Red": 255, "Green": 250, "Blue": 225 },
+		"warmGreen": { "Alpha": 75, "Red": 235, "Green": 245, "Blue": 200 },
+		"economy": { "Alpha": 50, "Red": 245, "Green": 230, "Blue": 180 },
+		"halogen": { "Alpha": 50, "Red": 255, "Green": 230, "Blue": 150 },
+		"pureWhite": { "Alpha": 50, "Red": 255, "Green": 255, "Blue": 255 },
+		"modernGreen": { "Alpha": 100, "Red": 210, "Green": 255, "Blue": 210 },
+		"blueWhite": { "Alpha": 50, "Red": 235, "Green": 235, "Blue": 255 },
+		"sportPink": { "Alpha": 50, "Red": 255, "Green": 220, "Blue": 220 },
+		"sportPurple": { "Alpha": 50, "Red": 235, "Green": 210, "Blue": 255 },
+		"racingAmber": { "Alpha": 50, "Red": 250, "Green": 180, "Blue": 60 },
+		"modernBlue": { "Alpha": 100, "Red": 210, "Green": 210, "Blue": 255 }
+			};
+
+			function initializeEditor() {
+				document.getElementById("jsonInput").value = JSON.stringify(defaultColors, null, 2);
+				updateColors();
+			}
+
+			function updateColors() {
+				try {
+					const jsonText = document.getElementById("jsonInput").value;
+					const colors = JSON.parse(jsonText);
+					renderColorGrid(colors);
+				} catch (error) {
+					alert("Invalid JSON: " + error.message);
+				}
+			}
+
+			function renderColorGrid(colors) {
+				const grid = document.getElementById("colorGrid");
+				grid.innerHTML = "";
+
+				Object.entries(colors).forEach(([name, color]) => {
+					const item = document.createElement("div");
+					item.className = "color-item";
+
+					const rgbColor = `rgb(${color.Red}, ${color.Green}, ${color.Blue})`;
+
+					item.innerHTML = `
+                    <div class="color-name">${name}</div>
+                    <div class="color-swatch" style="background-color: ${rgbColor};"></div>
+                    <div class="color-values">
+                        R: ${color.Red}<br>
+                        G: ${color.Green}<br>
+                        B: ${color.Blue}<br>
+                        A: ${color.Alpha}
+                    </div>
+                `;
+
+					grid.appendChild(item);
+				});
+			}
+
+			function resetToDefault() {
+				document.getElementById("jsonInput").value = JSON.stringify(defaultColors, null, 2);
+				updateColors();
+			}
+
+			// Initialize on load
+			window.onload = initializeEditor;
+		</script>
+	</body>
+</html>

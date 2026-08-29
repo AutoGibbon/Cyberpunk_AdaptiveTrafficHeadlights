@@ -1,0 +1,1 @@
+source_roots = [".", "Z:/GOG/Cyberpunk 2077/red4ext/plugins", "Z:/GOG/Cyberpunk 2077/r6/scripts/RedLogger", "Z:/GOG/Cyberpunk 2077/r6/scripts/RedData", "Z:/GOG/Cyberpunk 2077/r6/scripts/RedFileSystem", "Z:/GOG/Cyberpunk 2077/r6/scripts/RedWindows"]
