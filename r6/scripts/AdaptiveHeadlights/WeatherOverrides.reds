@@ -1,18 +1,17 @@
-module AdaptiveTrafficHeadlights
+module AdaptiveHeadlights
 
 // Suppresses the base game's rain-driven forced street-light/vehicle-light
-// reactions once our own light logic has taken over (mirrors the Lua mod's
-// four Override(...) calls). CLSWeatherListener declares its own override of
-// both methods (it extends WeatherScriptListener), so each class needs its
-// own wrap - wrapping only the base class would not intercept the subclass's
-// override.
+// reactions once our own light logic has taken over. CLSWeatherListener
+// declares its own override of both methods (it extends WeatherScriptListener),
+// so each class needs its own wrap - wrapping only the base class would miss
+// the subclass's override.
 //
-// The Lua mod additionally wrapped CLSWeatherListener's TurnOnLights/
-// TurnOffLights (both `private final func(reason: CName)`). Unlike the four
-// wraps above, these let the call through when reason == "PlayerPuppet" even
-// once we're blocking - that's the gate that lets our own ForceCLSStateRequest
-// (sourceName = n"PlayerPuppet") reach the game's logic while every other
-// caller (e.g. rain-driven calls with reason "RAIN") stays blocked.
+// CLSWeatherListener's TurnOnLights/TurnOffLights (both `private final
+// func(reason: CName)`) are also wrapped. Unlike the four wraps above, these
+// let the call through when reason == "PlayerPuppet" even while we're
+// blocking - that's what lets our own ForceCLSStateRequest (sourceName =
+// n"PlayerPuppet") reach the game's logic while other callers (e.g. rain-driven
+// calls with reason "RAIN") stay blocked.
 
 public abstract class ATH_WeatherOverrides {
   public static func ShouldBlock() -> Bool {

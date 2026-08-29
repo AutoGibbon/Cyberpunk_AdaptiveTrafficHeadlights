@@ -17,10 +17,10 @@ Every file below has been written and is internally consistent, but nothing has 
 the actual redscript compiler or the game yet - no `deploy.js`/`launch.js` run so far. See
 "Open items" below for the specific things most likely to need a fix once it does compile.
 
-## File inventory (`r6/scripts/adaptivetrafficheadlights/`)
+## File inventory (`r6/scripts/AdaptiveHeadlights/`)
 
 - **Logging.reds** - `ATHLog`/`ATHLogWarn`, thin wrappers around DVRCF's `RedLogger` facade.
-- **Data.reds** - headlight color palette, category mappings, and the ~450-entry vehicle list,
+- **ColorData.reds** - headlight color palette, category mappings, and the ~450-entry vehicle list,
   ported verbatim from the Lua's `settings.lua` defaults. Vehicle matching uses cached
   `TweakDBID` comparisons (`ATH_VehicleCategory.Matches`), not string comparison. Only
   `headlightColors` is persisted/user-editable (`colorData.json` via RedFileSystem+RedData);
@@ -31,8 +31,8 @@ the actual redscript compiler or the game yet - no `deploy.js`/`launch.js` run s
 - **Settings.reds** - scalar settings (`ATH_Settings`), owned by `ATH_SettingsSystem`. Loaded/
   saved via its own RedFileSystem+RedData JSON file (`settings.json`), same pattern as
   `ATH_ColorData`/`ATH_WeatherStateData`. No DVRCF involvement - edited live via the "Settings"
-  tab in `ColorEditorWindow.reds`, including a "Reset to Defaults" button.
-- **LightLogic.reds** - `ATH_LightController extends ScriptableSystem`, the core light-decision
+  tab in `EditorWindow.reds`, including a "Reset to Defaults" button.
+- **LightController.reds** - `ATH_LightController extends ScriptableSystem`, the core light-decision
   state machine (replaces the Lua `S` globals table and its CalculateLightState/
   UpdateStreetLights/TryGetWeatherData/Update functions - ported near-verbatim, same math).
   Also owns two independent self-rescheduling `DelayCallback` loops:
@@ -49,7 +49,7 @@ the actual redscript compiler or the game yet - no `deploy.js`/`launch.js` run s
   `OnRainIntensityChanged`/`OnRainIntensityTypeChanged`, suppressing the base game's rain-driven
   forced light reactions once our own logic has taken over. See "Open items" for what was
   deliberately *not* wrapped here.
-- **ColorEditorWindow.reds** - the single RedWindows live editor for everything: a "Settings"
+- **EditorWindow.reds** - the single RedWindows live editor for everything: a "Settings"
   tab (all scalar toggles/sliders from `ATH_Settings`, plus "Reset to Defaults"), a "Headlights"
   tab (R/G/B/A sliders + preview-on-new-vehicles checkbox per color), and a "Weather States" tab
   (per-state on/off time sliders, current state labeled).
@@ -83,39 +83,48 @@ the actual redscript compiler or the game yet - no `deploy.js`/`launch.js` run s
   and, on reflection, unnecessary here: it existed only because CET's Lua `onUpdate` hook runs
   even at the main menu with no real session loaded, so the Lua mod had no other way to tell a
   placeholder/pregame environment from a real one. This port's `OnPlayerAttach` hook only fires
-  once a real game session has attached a player, so `LightLogic.reds` instead gates on
+  once a real game session has attached a player, so `LightController.reds` instead gates on
   `ArraySize(envDef.weatherStates) > 0`, which is both accessible and sufficient.
 - **Custom `Wrap24` modulo helper**: the base game's native `ModF()` (core/math/scalar.script)
   returns 0 for any non-positive input, which would misbehave on the negative intermediate
   values this logic legitimately produces (e.g. around the `lastLightDecisionTime` sentinel of
-  -1.0). `LightLogic.reds` implements its own floored modulo instead of using `ModF()`.
+  -1.0). `LightController.reds` implements its own floored modulo instead of using `ModF()`.
 - **Everything is a hard dependency** - no `@if(ModuleExists(...))` guards, matching how DVRCF
   and RedWindows already hard-require each other and Codeware.
 
 ## Fixed by first in-game test (2026-08-29)
 
-- **`FileSystem.GetStorage("AdaptiveTrafficHeadlights")` denied - wrong casing**: the very
-  first real launch (after the `CResource.path` fix above let scripts compile) showed
-  `Settings.reds`/`Data.reds`/`WeatherStateData.reds` all logging "exists but is not a JSON
-  object/array" for files that don't actually exist on disk. `Z:\...\red4ext\logs\redfilesystem-*.log`
-  had the real error: `Name of storage "AdaptiveTrafficHeadlights" is not allowed.` RedFileSystem
-  validates the storage name against the mod's actual `r6/scripts/` folder name, case-sensitively
-  (confirmed by comparing against `DigitalVixenCore`/`RedscriptConfigFramework`, both granted -
-  their storage name strings match their PascalCase script folders exactly). At the time, this
-  project's script folder was lowercase `adaptivetrafficheadlights` while all three
-  `GetStorage()` calls passed `"AdaptiveTrafficHeadlights"`. Every storage call was therefore
-  silently denied all session - `Exists()` came back as the enum's zero value
-  (`FileSystemStatus.True`, a false positive), and `GetFile(...).ReadAsJson()`/`WriteJson(...)`
-  on the denied handle came back undefined/no-op. Net effect: settings/color data were never
-  read or written, and a hand-placed `weatherStates.json` in storages was never overwritten
-  either (confirmed byte-for-byte intact via its unchanged mtime and a plain `JSON.parse`) even
-  though the log claimed to discover and save 80 fresh states. Fixed by renaming the script
-  folder itself to `r6/scripts/AdaptiveTrafficHeadlights` (PascalCase, matching every other
-  mod's convention and the storage name already used in code) rather than lowercasing the
-  storage name - see File Structure above. `Logging.reds`'s
-  `RedLog.AppendLevel("AdaptiveTrafficHeadlights", ...)` calls needed no change - they already
-  produced a working log file even before this fix, so RedLogger evidently doesn't enforce the
-  same folder-name check.
+- **`FileSystem.GetStorage("AdaptiveTrafficHeadlights")` denied - name too long, not a casing
+  issue**: the very first real launch (after the `CResource.path` fix above let scripts compile)
+  showed `Settings.reds`/`ColorData.reds`/`WeatherStateData.reds` all logging "exists but is not a
+  JSON object/array" for files that don't actually exist on disk. An earlier pass at this note
+  blamed folder casing and "fixed" it by renaming the script folder to PascalCase
+  `AdaptiveTrafficHeadlights` - that did **not** fix anything; the folder was already
+  case-correct and the storage was still rejected afterwards. The real native-plugin log
+  (`red4ext/logs/redfilesystem-*.log`, separate from the mod's own redscript log) had the actual
+  error: `Name of storage "AdaptiveTrafficHeadlights" is not allowed.` Every other storage name
+  granted on this install - `RedscriptConfigFramework` (24 chars), `VehicleNavigationSystem`
+  (23), `DigitalVixenCore` (16) - is ≤24 characters; `AdaptiveTrafficHeadlights` is 25. That's
+  the actual rule (or at least the only pattern that distinguishes this one), not casing. Because
+  `GetStorage()` never actually succeeded, every downstream call operated on a broken handle:
+  `Exists()` came back as the enum's zero value (`FileSystemStatus.True`, a false positive) even
+  for files that don't exist on disk, and `GetFile(...).ReadAsJson()`/`WriteJson(...)` on that
+  handle came back undefined/no-op even for `weatherStates.json`, which is a genuinely valid JSON
+  array on disk. Net effect: settings/color/weather data were never read or written all session.
+  Fixed by renaming the module/folder/storage name to `AdaptiveHeadlights` (18 chars) throughout
+  - see File Structure in CLAUDE.md. The `ATH_` class prefix was intentionally left alone.
+- **`FileSystem.GetStorage()` called once per `Load()`/`Save()` instead of once per session**:
+  a second, independent bug uncovered by the same log dive - the plugin permanently revokes a
+  storage for the rest of the session on a second `GetStorage()` call for the same name
+  ("Only one mod can access its own storage with RedFileSystem"). `ATH_Settings`/`ATH_ColorData`/
+  `ATH_WeatherStateData` each had their own private `GetStorage()` helper calling
+  `FileSystem.GetStorage(...)` fresh on every `Load()`/`Save()` - at least 6 call sites total.
+  This hadn't manifested yet only because the naming bug above blocked every call before it could
+  matter. Fixed by adding `Storage.reds`'s `ATH_StorageService` (a `ScriptableService` that fetches
+  the storage exactly once in `OnLoad()` and caches it), mirroring `DVRCF_StoreService`/
+  `DVItemDatabaseService` in the reference mods under `RedscriptConfigFramework`/
+  `DigitalVixenCore`. All three data classes now pull the cached handle via
+  `ATH_StorageService.Get()` instead of fetching their own.
 
 ## Open items (things worth a second look, not yet resolved by testing)
 

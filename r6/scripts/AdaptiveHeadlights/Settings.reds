@@ -1,14 +1,12 @@
-module AdaptiveTrafficHeadlights
+module AdaptiveHeadlights
 
 import RedFileSystem.*
 import RedData.Json.*
 
-// Scalar settings, a 1:1 port of the old CET UI's "Main" tab (settings.lua's
-// defaultSettings + ui.lua's drawMainTab). autoResize/lockWindow/themeDisabled
-// are intentionally dropped - they only existed to manage the old custom ImGui
-// window, which the RedWindows editor now owns. Edited live via the "Settings"
-// tab in ColorEditorWindow.reds, persisted here via RedFileSystem+RedData -
-// same pattern as ATH_ColorData/ATH_WeatherStateData.
+// Scalar settings. autoResize/lockWindow/themeDisabled are dropped - they
+// only existed to manage a custom ImGui window, now owned by RedWindows.
+// Edited live via the "Settings" tab in EditorWindow.reds, persisted via
+// RedFileSystem+RedData - same pattern as ATH_ColorData/ATH_WeatherStateData.
 public class ATH_Settings {
   public let useNaturalMode: Bool;
   public let enableStreetLightControl: Bool;
@@ -46,15 +44,11 @@ public class ATH_Settings {
     return s;
   }
 
-  private static func GetStorage() -> ref<FileSystemStorage> {
-    return FileSystem.GetStorage("AdaptiveTrafficHeadlights");
-  }
-
-  // Only overwrites fields present in the saved file - a truncated/hand-edited
-  // file cannot reset fields it does not mention.
+  // Only overwrites fields present in the file - a truncated/hand-edited
+  // file can't reset fields it omits.
   public func Load() -> Void {
-    let storage: ref<FileSystemStorage> = ATH_Settings.GetStorage();
-    if !Equals(storage.Exists("settings.json"), FileSystemStatus.True) {
+    let storage: ref<FileSystemStorage> = ATH_StorageService.Get();
+    if !IsDefined(storage) || !Equals(storage.Exists("settings.json"), FileSystemStatus.True) {
       return;
     }
     let root: ref<JsonVariant> = storage.GetFile("settings.json").ReadAsJson();
@@ -76,6 +70,10 @@ public class ATH_Settings {
   }
 
   public func Save() -> Void {
+    let storage: ref<FileSystemStorage> = ATH_StorageService.Get();
+    if !IsDefined(storage) {
+      return;
+    }
     let root: ref<JsonObject> = new JsonObject();
     root.SetKeyBool("useNaturalMode", this.useNaturalMode);
     root.SetKeyBool("enableStreetLightControl", this.enableStreetLightControl);
@@ -86,7 +84,7 @@ public class ATH_Settings {
     root.SetKeyBool("adjustAllWeatherStates", this.adjustAllWeatherStates);
     root.SetKeyDouble("allOnTime", Cast<Double>(this.allOnTime));
     root.SetKeyDouble("allOffTime", Cast<Double>(this.allOffTime));
-    ATH_Settings.GetStorage().GetFile("settings.json").WriteJson(root, "  ");
+    storage.GetFile("settings.json").WriteJson(root, "  ");
   }
 }
 
@@ -94,7 +92,7 @@ public class ATH_SettingsSystem extends ScriptableSystem {
   private let m_settings: ref<ATH_Settings>;
 
   public static func GetInstance(gi: GameInstance) -> ref<ATH_SettingsSystem> {
-    return GameInstance.GetScriptableSystemsContainer(gi).Get(n"AdaptiveTrafficHeadlights.ATH_SettingsSystem") as ATH_SettingsSystem;
+    return GameInstance.GetScriptableSystemsContainer(gi).Get(n"AdaptiveHeadlights.ATH_SettingsSystem") as ATH_SettingsSystem;
   }
 
   public func GetSettings() -> ref<ATH_Settings> {
@@ -102,9 +100,9 @@ public class ATH_SettingsSystem extends ScriptableSystem {
   }
 
   // Defaults assigned immediately so GetSettings() is never null; the saved
-  // file (if any) is merged in at Session/Ready, same timing the old DVRCF
-  // registration used - keeps disk I/O off the earlier OnAttach world-attach
-  // point, matching how ATH_ColorData/ATH_WeatherStateData defer theirs too.
+  // file merges in at Session/Ready (same timing as the old DVRCF registration),
+  // keeping disk I/O off the earlier OnAttach point - same deferral
+  // ATH_ColorData/ATH_WeatherStateData use.
   public func OnAttach() -> Void {
     this.m_settings = ATH_Settings.Defaults();
     GameInstance.GetCallbackSystem()

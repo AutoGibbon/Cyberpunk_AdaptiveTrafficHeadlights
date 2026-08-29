@@ -1,4 +1,4 @@
-module AdaptiveTrafficHeadlights
+module AdaptiveHeadlights
 
 import RedFileSystem.*
 import RedData.Json.*
@@ -10,9 +10,8 @@ public class ATH_WeatherStateTime {
 }
 
 // Discovers the game's weather states at runtime (via Codeware's WeatherSystem
-// extensions) and keeps a persisted on/off time per state, mirroring the old
-// Lua mod's weatherStateSettings.json. Default on/off time for a newly
-// discovered state is 19:00 / 7:00, same as the Lua version.
+// extensions) and keeps a persisted on/off time per state. Default for a
+// newly discovered state is 19:00 / 7:00.
 public class ATH_WeatherStateData {
   public let states: array<ref<ATH_WeatherStateTime>>;
 
@@ -61,13 +60,9 @@ public class ATH_WeatherStateData {
     return added > 0;
   }
 
-  private static func GetStorage() -> ref<FileSystemStorage> {
-    return FileSystem.GetStorage("AdaptiveTrafficHeadlights");
-  }
-
   public func Load() -> Void {
-    let storage: ref<FileSystemStorage> = ATH_WeatherStateData.GetStorage();
-    if !Equals(storage.Exists("weatherStates.json"), FileSystemStatus.True) {
+    let storage: ref<FileSystemStorage> = ATH_StorageService.Get();
+    if !IsDefined(storage) || !Equals(storage.Exists("weatherStates.json"), FileSystemStatus.True) {
       return;
     }
     let root: ref<JsonVariant> = storage.GetFile("weatherStates.json").ReadAsJson();
@@ -99,6 +94,10 @@ public class ATH_WeatherStateData {
   }
 
   public func Save() -> Void {
+    let storage: ref<FileSystemStorage> = ATH_StorageService.Get();
+    if !IsDefined(storage) {
+      return;
+    }
     let arr: ref<JsonArray> = new JsonArray();
     let i: Int32 = 0;
     while i < ArraySize(this.states) {
@@ -109,7 +108,7 @@ public class ATH_WeatherStateData {
       arr.AddItem(entry);
       i += 1;
     }
-    ATH_WeatherStateData.GetStorage().GetFile("weatherStates.json").WriteJson(arr, "  ");
+    storage.GetFile("weatherStates.json").WriteJson(arr, "  ");
   }
 
   public static func LoadOrEmpty() -> ref<ATH_WeatherStateData> {

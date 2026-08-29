@@ -1,7 +1,9 @@
-module AdaptiveTrafficHeadlights
+module AdaptiveHeadlights
 
-// Recurring ~10s tick, replacing the old Lua mod's Cron.Every(10.0, ...).
-// Re-registers itself every call, same pattern documented in this repo's CLAUDE.md.
+import RedWindows.*
+
+// Recurring ~10s tick. Re-registers itself every call, same pattern
+// documented in this repo's CLAUDE.md.
 public class ATH_TickCallback extends DelayCallback {
   public let handler: wref<ATH_LightController>;
 
@@ -18,12 +20,15 @@ public class ATH_TickCallback extends DelayCallback {
   }
 }
 
-// Separate, much faster recurring tick dedicated to the RedWindows editor panel
-// (ColorEditorWindow.reds) - decoupled from the 10s light-decision tick above so
-// slider drags etc. don't wait up to 10s to be read back and persisted. RedWindows
-// itself is retained-mode and documented as cheap to update every frame; 0.0333s
-// (~30Hz) - VehicleNavigationSystem uses the identical self-rescheduling pattern
-// at ~60Hz for its own RedWindows panel, 30Hz is plenty for slider/checkbox edits.
+// Separate, faster recurring tick dedicated to the RedWindows editor panel
+// (EditorWindow.reds) - decoupled from the 10s light-decision tick so slider
+// drags aren't read back and persisted with up to 10s of lag. RedWindows is
+// retained-mode and cheap to update every frame; 0.0333s (~30Hz) matches
+// VehicleNavigationSystem's identical self-rescheduling pattern for its own
+// panel (~60Hz there - 30Hz is plenty for slider/checkbox edits). Only redraws
+// while the overlay is open (ATH_LightController.OnEditorTick); otherwise it
+// just polls RedWindowsAPI.IsOverlay() at EDITOR_TICK_IDLE so the panel wakes
+// promptly without paying the 30Hz cost while nobody's looking.
 public class ATH_EditorTickCallback extends DelayCallback {
   public let handler: wref<ATH_LightController>;
 
@@ -40,9 +45,8 @@ public class ATH_EditorTickCallback extends DelayCallback {
   }
 }
 
-// Core light-decision state machine, replacing the Lua mod's `S` globals table
-// and its CalculateLightState/UpdateStreetLights/TryGetWeatherData/Update
-// functions. Ported near-verbatim - same math, same branching.
+// Core light-decision state machine: tracks time-of-day and weather state,
+// and decides when vehicle headlights and street lights should be on or off.
 public class ATH_LightController extends ScriptableSystem {
   private let m_initialized: Bool;
 
@@ -72,15 +76,18 @@ public class ATH_LightController extends ScriptableSystem {
   private let m_streetLightsSetOnce: Bool;
   private let m_cls: wref<CityLightSystem>;
 
-  // Empty = no override. Set from ColorEditorWindow.reds's per-color "Preview"
-  // checkbox, mirroring the Lua mod's cetLightOverrideColor/Name.
+  // Empty = no override. Set from EditorWindow.reds's per-color "Preview" checkbox.
   private let m_previewColorName: String;
 
+  // ~30Hz while the overlay is open; 1Hz poll otherwise (see ATH_EditorTickCallback).
+  private const let EDITOR_TICK_ACTIVE: Float = 0.0333;
+  private const let EDITOR_TICK_IDLE: Float = 1.0;
+
   public static func GetInstance(gi: GameInstance) -> ref<ATH_LightController> {
-    return GameInstance.GetScriptableSystemsContainer(gi).Get(n"AdaptiveTrafficHeadlights.ATH_LightController") as ATH_LightController;
+    return GameInstance.GetScriptableSystemsContainer(gi).Get(n"AdaptiveHeadlights.ATH_LightController") as ATH_LightController;
   }
 
-  // --- public accessors, used by VehicleLights.reds and ColorEditorWindow.reds ---
+  // --- public accessors, used by VehicleLights.reds and EditorWindow.reds ---
 
   public func GetColorData() -> ref<ATH_ColorData> {
     return this.m_colorData;
@@ -136,8 +143,9 @@ public class ATH_LightController extends ScriptableSystem {
         ATHLogWarn("ATH_SettingsSystem not available on attach, falling back to defaults");
         this.m_settings = ATH_Settings.Defaults();
       }
+      ATH_EditorWindow.EnsureWindow(gi);
       GameInstance.GetDelaySystem(gi).DelayCallback(ATH_TickCallback.Create(this), 10.0, false);
-      GameInstance.GetDelaySystem(gi).DelayCallback(ATH_EditorTickCallback.Create(this), 0.0333, false);
+      GameInstance.GetDelaySystem(gi).DelayCallback(ATH_EditorTickCallback.Create(this), this.EDITOR_TICK_IDLE, false);
     }
     this.ResetSessionState();
     this.TryGetWeatherData();
@@ -166,13 +174,15 @@ public class ATH_LightController extends ScriptableSystem {
   }
 
   // Runs independently of OnTick() above - see ATH_EditorTickCallback. Not
-  // gated on IsPreGame/IsGamePaused: editing settings while the overlay has
-  // paused the game (RedWindows' own "Pause Game" option) is a legitimate use.
+  // gated on IsPreGame/IsGamePaused: editing settings while RedWindows has
+  // paused the game (its own "Pause Game" option) is legitimate. Redraws
+  // only while the overlay is open; otherwise just polls IsOverlay().
   public func OnEditorTick() -> Void {
     let gi: GameInstance = this.GetGameInstance();
-    GameInstance.GetDelaySystem(gi).DelayCallback(ATH_EditorTickCallback.Create(this), 0.0333, false);
-    if this.m_initialized {
-      ATH_ColorEditorWindow.Update(gi, this);
+    let overlayOpen: Bool = RedWindowsAPI.IsOverlay(gi);
+    GameInstance.GetDelaySystem(gi).DelayCallback(ATH_EditorTickCallback.Create(this), overlayOpen ? this.EDITOR_TICK_ACTIVE : this.EDITOR_TICK_IDLE, false);
+    if this.m_initialized && overlayOpen {
+      ATH_EditorWindow.Update(gi, this);
     }
   }
 
@@ -195,13 +205,9 @@ public class ATH_LightController extends ScriptableSystem {
       return;
     }
 
-    // The Lua mod had to guess whether a real environment was loaded by string-matching
-    // its resource path (rejecting "v002" placeholder/pregame environments) because CET's
-    // onUpdate hook runs even at the main menu, with no real session. We don't have that
-    // problem: OnPlayerAttach only fires once a real game session has attached a player, so
-    // a non-null envDef with populated weatherStates already means a loaded, real environment.
-    // (CResource.path itself is not accessible here - it's declared without `public` in
-    // Codeware's header - so the old path-string check isn't an option regardless.)
+    // OnPlayerAttach only fires once a real game session has attached a player, so a
+    // non-null envDef with populated weatherStates already means a loaded, real
+    // environment - no need to filter out placeholder/pregame environments.
     if !this.m_foundEnv {
       if ArraySize(envDef.weatherStates) > 0 {
         this.m_foundEnv = true;
@@ -263,11 +269,10 @@ public class ATH_LightController extends ScriptableSystem {
     this.m_playerSpawned = true;
   }
 
-  // Correct floored modulo for a positive divisor, used instead of the base
-  // game's ModF() global (core/math/scalar.script), which returns 0 for any
-  // non-positive input and would misbehave on the negative intermediate values
-  // this logic legitimately produces (e.g. around the lastLightDecisionTime
-  // sentinel of -1.0).
+  // Floored modulo for a positive divisor, used instead of the base game's
+  // ModF() global (core/math/scalar.script), which returns 0 for non-positive
+  // input and would misbehave on the negative intermediate values this logic
+  // produces (e.g. around the lastLightDecisionTime sentinel of -1.0).
   private func Wrap24(value: Float) -> Float {
     let m: Float = value - Cast<Float>(FloorF(value / 24.0)) * 24.0;
     if m < 0.0 {

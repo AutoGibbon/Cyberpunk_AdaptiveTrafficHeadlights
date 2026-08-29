@@ -8,7 +8,7 @@ The rewrite exists because five utility mods now cover everything CET/Lua used t
 
 ## File Structure
 
-- `r6/scripts/AdaptiveTrafficHeadlights/` - RedScript source files (module `AdaptiveTrafficHeadlights`, classes prefixed `ATH_`)
+- `r6/scripts/AdaptiveHeadlights/` - RedScript source files (module `AdaptiveHeadlights`, classes prefixed `ATH_`). Module/folder/storage name is intentionally shorter than the mod's display name - RedFileSystem rejects storage names above a certain length (confirmed: 25 chars, `AdaptiveTrafficHeadlights`, was rejected; every working storage name on this install is ≤24 chars), so `AdaptiveHeadlights` (18 chars) is used for all three instead.
 - `bin/` - the old CET Lua mod, reference only, not part of the build
 
 ## Dependencies (hard requirements)
@@ -76,7 +76,7 @@ A recurring tick (replacing the old Lua `Cron.Every`) is a `DelayCallback` whose
 
 ### Settings
 
-All settings - scalar toggles/sliders (`Settings.reds`), the headlight color palette and per-weather-state on/off times (`Data.reds` / `WeatherStateData.reds`) - are edited live through the single `ColorEditorWindow.reds` RedWindows panel ("Settings" / "Headlights" / "Weather States" tabs) and persisted via RedFileSystem+RedData JSON. There is no DVRCF-driven UI in this mod; each settings class owns its own `Load()`/`Save()`/`Defaults()` following the same pattern (see `ATH_Settings` in `Settings.reds` or `ATH_ColorData` in `Data.reds`).
+All settings - scalar toggles/sliders (`Settings.reds`), the headlight color palette and per-weather-state on/off times (`ColorData.reds` / `WeatherStateData.reds`) - are edited live through the single `EditorWindow.reds` RedWindows panel ("Settings" / "Headlights" / "Weather States" tabs) and persisted via RedFileSystem+RedData JSON. There is no DVRCF-driven UI in this mod; each settings class owns its own `Load()`/`Save()`/`Defaults()` following the same pattern (see `ATH_Settings` in `Settings.reds` or `ATH_ColorData` in `ColorData.reds`).
 
 ## Notes
 
@@ -98,7 +98,7 @@ When the user says "deploy and launch" (or equivalent), run this immediately, wi
 node deploy.js && node launch.js
 ```
 
-- `deploy.js` deletes `r6/scripts/AdaptiveTrafficHeadlights` under the deployment target, then copies the entire local `./r6` folder over the target's `r6` folder (this also overwrites any non-mod files under the target's `r6/`, not just this mod's subfolders). It deliberately does NOT delete `r6/storages/AdaptiveTrafficHeadlights` — that holds persisted settings/color/weather-state JSON and must survive redeploys.
+- `deploy.js` deletes `r6/scripts/AdaptiveHeadlights` under the deployment target, then copies the entire local `./r6` folder over the target's `r6` folder (this also overwrites any non-mod files under the target's `r6/`, not just this mod's subfolders). It deliberately does NOT delete `r6/storages/AdaptiveHeadlights` — that holds persisted settings/color/weather-state JSON and must survive redeploys.
 - `launch.js` starts Cyberpunk 2077 via its shortcut, fire-and-forget (no wait for the game to actually launch).
 - Pre-authorization covers only this exact two-step command as documented here. Any variation (different target, different scope, force-push-style destructive ops elsewhere) still needs explicit confirmation per the general safety rules above.
 

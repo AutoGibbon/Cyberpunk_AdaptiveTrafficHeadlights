@@ -1,4 +1,4 @@
-module AdaptiveTrafficHeadlights
+module AdaptiveHeadlights
 
 import RedFileSystem.*
 import RedData.Json.*
@@ -37,8 +37,8 @@ public class ATH_VehicleCategory {
   public let category: String;
   public let vehicleNames: array<String>;
 
-  // TweakDBID hashes of vehicleNames, built lazily on first lookup and cached -
-  // comparing hashes avoids re-hashing ~450 strings on every crowd vehicle spawn.
+  // TweakDBID hashes of vehicleNames, built lazily and cached - avoids
+  // re-hashing ~450 strings on every crowd vehicle spawn.
   private let m_ids: array<TweakDBID>;
   private let m_idsBuilt: Bool;
 
@@ -69,10 +69,9 @@ public class ATH_VehicleCategory {
   }
 }
 
-// Live headlight palette + category mappings. Defaults ported verbatim from the
-// old CET Lua mod's settings.lua (defaultHeadlightColors/Categories/VehicleCategories).
-// Only headlightColors is user-editable in-game (via ColorEditorWindow.reds) and persisted;
-// the category mappings are fixed content data, same as they effectively were in the Lua version.
+// Live headlight palette + category mappings. Only headlightColors is
+// user-editable in-game (via EditorWindow.reds) and persisted; the category
+// mappings are fixed content data.
 public class ATH_ColorData {
   public let colors: array<ref<ATH_HeadlightColor>>;
   public let headlightCategories: array<ref<ATH_CategoryColorNames>>;
@@ -112,15 +111,11 @@ public class ATH_ColorData {
     return "";
   }
 
-  private static func GetStorage() -> ref<FileSystemStorage> {
-    return FileSystem.GetStorage("AdaptiveTrafficHeadlights");
-  }
-
-  // Only overwrites colors present in the saved file - a truncated/hand-edited
-  // file cannot wipe colors it does not mention.
+  // Only overwrites colors present in the file - a truncated/hand-edited
+  // file can't wipe colors it omits.
   public func Load() -> Void {
-    let storage: ref<FileSystemStorage> = ATH_ColorData.GetStorage();
-    if !Equals(storage.Exists("colorData.json"), FileSystemStatus.True) {
+    let storage: ref<FileSystemStorage> = ATH_StorageService.Get();
+    if !IsDefined(storage) || !Equals(storage.Exists("colorData.json"), FileSystemStatus.True) {
       return;
     }
     let root: ref<JsonVariant> = storage.GetFile("colorData.json").ReadAsJson();
@@ -158,6 +153,10 @@ public class ATH_ColorData {
   }
 
   public func Save() -> Void {
+    let storage: ref<FileSystemStorage> = ATH_StorageService.Get();
+    if !IsDefined(storage) {
+      return;
+    }
     let root: ref<JsonObject> = new JsonObject();
     let colorsArr: ref<JsonArray> = new JsonArray();
     let i: Int32 = 0;
@@ -172,7 +171,7 @@ public class ATH_ColorData {
       i += 1;
     }
     root.SetKey("headlightColors", colorsArr);
-    ATH_ColorData.GetStorage().GetFile("colorData.json").WriteJson(root, "  ");
+    storage.GetFile("colorData.json").WriteJson(root, "  ");
   }
 
   public static func LoadOrDefault() -> ref<ATH_ColorData> {

@@ -1,8 +1,7 @@
-module AdaptiveTrafficHeadlights
+module AdaptiveHeadlights
 
-// Delays the actual light application by 0.1s after attach, same as the Lua
-// mod's Cron.After(0.1, ...) - gives other mods time to finish cycling vehicle
-// appearances first, for compatibility.
+// Delays the actual light application by 0.1s after attach - gives other
+// mods time to finish cycling vehicle appearances first, for compatibility.
 public class ATH_ApplyLightsCallback extends DelayCallback {
   public let vehicle: wref<VehicleObject>;
 
@@ -42,9 +41,9 @@ public abstract class ATH_VehicleLights {
       return;
     }
 
-    // Using the transition factor here lets vehicles have a delayed response to
-    // weather/time state changes, and also turn on/off a bit earlier or later
-    // than the exact threshold - same reasoning as the Lua version.
+    // Using the transition factor here lets vehicles have a delayed response
+    // to weather/time state changes, turning on/off a bit earlier or later
+    // than the exact threshold rather than snapping instantly.
     let lightsShouldBeOn: Bool = controller.LightsShouldBeOn();
     let transitionFactor: Float = controller.LightTransitionFactor();
     if settings.useNaturalMode && transitionFactor < 1.0 && RandF() > transitionFactor {
@@ -122,10 +121,7 @@ public abstract class ATH_VehicleLights {
   }
 }
 
-// Only fires for non-player crowd vehicles that aren't abandoned, same guard
-// as the Lua mod's Observe("vehicleBaseObject", "OnGameAttached", ...).
-// "vehicleBaseObject" isn't a declared redscript type (CET's runtime reflection
-// can reach native classes redscript can't name).
+// Only fires for non-player crowd vehicles that aren't abandoned.
 //
 // Hooked at VehicleComponent.OnGameAttach (not VehicleObject.OnGameAttached) -
 // confirmed against two real, shipped mods doing this exact job for crowd
