@@ -37,6 +37,18 @@ public abstract class ATH_EditorWindow {
       return;
     }
 
+    // Current weather/time report, mirrored from the WeatherSwitcher CET mod's
+    // control panel status row - shown above the tabs so it's visible no
+    // matter which one is active.
+    let weatherLabel: String = controller.CurrentWeatherStateName();
+    if Equals(weatherLabel, "none") || StrLen(weatherLabel) == 0 {
+      weatherLabel = "Detecting...";
+    }
+    win.Text(n"info_weather", s"Weather: \(weatherLabel)");
+    win.SameLine();
+    win.Text(n"info_time", s"Time: \(controller.CurrentTimeLabel())");
+    win.Separator(n"info_sep");
+
     let tabLabels: array<String> = ["Settings", "Headlights", "Weather States"];
     let tab: Int32 = win.TabBar(n"tabs", tabLabels);
     if tab == 0 {
@@ -233,6 +245,8 @@ public abstract class ATH_EditorWindow {
       win.Text(n"ws_empty", "No weather states discovered yet - load a save first.");
       return;
     }
+    win.Text(n"ws_info", "This list is scrollable!");
+
     let currentState: String = controller.CurrentWeatherStateName();
 
     let labels: array<String> = [];

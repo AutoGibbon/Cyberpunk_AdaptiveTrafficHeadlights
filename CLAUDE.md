@@ -31,19 +31,19 @@ Real source for these mods (read before assuming an API - do not guess):
 - `Z:\GOG\Cyberpunk 2077\red4ext\plugins\Codeware\Scripts\Codeware.Global.reds` - Codeware's `@addMethod` extensions to native classes, e.g. `WeatherSystem.GetWeatherState()`/`GetEnvironmentDefinition()`, which the base game's redscript surface does not expose on its own
 - raw decompiled source dump for base-game API reference: `E:\Tools\mods\cp77\redscript\source`
 
+@../_shared/redscript-practices.md
+
+The import above holds RedScript conventions, the delay-system callback pattern, and the null-safety rules shared across every redscript mod in this scope, this project included. It lives outside `proj/` itself (not at `proj/CLAUDE.md`) specifically so it doesn't auto-load as an ancestor CLAUDE.md for this repo's many non-redscript sibling projects — each redscript project opts in explicitly via the import line above. This file only covers what's specific to this project.
+
 ## Code Style & Conventions
 
 ### RedScript (.reds files)
 
-- Use PascalCase for class names and public methods
-- Use camelCase for variables and private methods
-- Use m_varName for private/protected class fields
-- Follow RedScript naming conventions for game API calls
-- raw source dumps for api reference: E:\Tools\mods\cp77\redscript\source
+- Naming conventions, API-reference source dump, null-safety rules: see `../_shared/redscript-practices.md`.
 
 ### Delay system
 
-Same pattern as this repo's sibling project (`Reinforcements_GangVsGang`) - used to throttle or defer work, via the native `DelaySystem` class and `DelayCallback` handlers:
+Same pattern as `../_shared/redscript-practices.md` describes (and as this repo's sibling project, `Reinforcements_GangVsGang`, uses) - the native `DelaySystem` class and `DelayCallback` handlers, `wref` target guarded with `IsDefined()` in every `Call()`. Reached here via `GameInstance.GetDelaySystem(gi)` rather than a stored member:
 
 ```
 public class ATH_SomeCallback extends DelayCallback {
@@ -56,6 +56,7 @@ public class ATH_SomeCallback extends DelayCallback {
     }
 
     public func Call() -> Void {
+        if !IsDefined(this.handler) { return; }
         this.handler.SomeCallback();
     }
 }

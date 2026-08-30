@@ -60,6 +60,7 @@ public class ATH_LightController extends ScriptableSystem {
 
   private let m_hours: Float;
   private let m_minutes: Float;
+  private let m_seconds: Float;
   private let m_currentTime: Float;
   private let m_lastUpdateTime: Float;
 
@@ -67,6 +68,11 @@ public class ATH_LightController extends ScriptableSystem {
   private let m_lastState: String;
   private let m_weatherChanged: Bool;
   private let m_timeWasSkipped: Bool;
+
+  // Display-only mirror of the weather state name, refreshed at editor-tick
+  // cadence (see RefreshDisplayInfo) so the panel reads live without touching
+  // m_state, which the slow tick alone must own for weather-change detection.
+  private let m_displayWeatherState: String;
 
   private let m_lightsShouldBeOn: Bool;
   private let m_lightTransitionFactor: Float;
@@ -79,8 +85,8 @@ public class ATH_LightController extends ScriptableSystem {
   // Empty = no override. Set from EditorWindow.reds's per-color "Preview" checkbox.
   private let m_previewColorName: String;
 
-  // ~30Hz while the overlay is open; 1Hz poll otherwise (see ATH_EditorTickCallback).
-  private const let EDITOR_TICK_ACTIVE: Float = 0.0333;
+  // ~15Hz while the overlay is open; 1Hz poll otherwise (see ATH_EditorTickCallback).
+  private const let EDITOR_TICK_ACTIVE: Float = 0.066;
   private const let EDITOR_TICK_IDLE: Float = 1.0;
 
   public static func GetInstance(gi: GameInstance) -> ref<ATH_LightController> {
@@ -106,7 +112,19 @@ public class ATH_LightController extends ScriptableSystem {
   }
 
   public func CurrentWeatherStateName() -> String {
-    return this.m_state;
+    return this.m_displayWeatherState;
+  }
+
+  // "HH:MM:SS", zero-padded. Reflects RefreshDisplayInfo()'s last read when the
+  // overlay is open, falling back to Update()'s slow-tick value otherwise.
+  public func CurrentTimeLabel() -> String {
+    let h: Int32 = Cast<Int32>(this.m_hours);
+    let m: Int32 = Cast<Int32>(this.m_minutes);
+    let sec: Int32 = Cast<Int32>(this.m_seconds);
+    let hStr: String = h < 10 ? s"0\(h)" : s"\(h)";
+    let mStr: String = m < 10 ? s"0\(m)" : s"\(m)";
+    let sStr: String = sec < 10 ? s"0\(sec)" : s"\(sec)";
+    return s"\(hStr):\(mStr):\(sStr)";
   }
 
   public func IsReady() -> Bool {
@@ -126,6 +144,7 @@ public class ATH_LightController extends ScriptableSystem {
   public func OnAttach() -> Void {
     this.m_state = "none";
     this.m_lastState = "none";
+    this.m_displayWeatherState = "none";
     this.m_lastLightDecisionTime = -1.0;
     this.m_lightTransitionFactor = 1.0;
   }
@@ -182,8 +201,31 @@ public class ATH_LightController extends ScriptableSystem {
     let overlayOpen: Bool = RedWindowsAPI.IsOverlay(gi);
     GameInstance.GetDelaySystem(gi).DelayCallback(ATH_EditorTickCallback.Create(this), overlayOpen ? this.EDITOR_TICK_ACTIVE : this.EDITOR_TICK_IDLE, false);
     if this.m_initialized && overlayOpen {
+      this.RefreshDisplayInfo();
       ATH_EditorWindow.Update(gi, this);
     }
+  }
+
+  // Display-only refresh, run at editor-tick cadence while the overlay is open
+  // (up to ~30Hz) so the time/weather readout feels live. Deliberately reads
+  // straight from the game systems instead of calling Update()/CalculateLightState -
+  // the actual light-decision logic must stay on its own slow tick (see OnTick),
+  // so this never touches m_state, m_currentTime, or any of the light-decision fields.
+  private func RefreshDisplayInfo() -> Void {
+    this.ReadGameTime();
+    this.m_displayWeatherState = this.ReadWeatherStateName();
+  }
+
+  private func ReadGameTime() -> Void {
+    let gameTime: GameTime = GameInstance.GetTimeSystem(this.GetGameInstance()).GetGameTime();
+    this.m_hours = Cast<Float>(GameTime.Hours(gameTime));
+    this.m_minutes = Cast<Float>(GameTime.Minutes(gameTime));
+    this.m_seconds = Cast<Float>(GameTime.Seconds(gameTime));
+  }
+
+  private func ReadWeatherStateName() -> String {
+    let weatherState: ref<worldWeatherState> = GameInstance.GetWeatherSystem(this.GetGameInstance()).GetWeatherState();
+    return IsDefined(weatherState) ? NameToString(weatherState.name) : "";
   }
 
   // --- weather data readiness ---
@@ -239,13 +281,10 @@ public class ATH_LightController extends ScriptableSystem {
     if !this.m_gotWeatherStates {
       return;
     }
-    let gi: GameInstance = this.GetGameInstance();
-    let gameTime: GameTime = GameInstance.GetTimeSystem(gi).GetGameTime();
-    this.m_hours = Cast<Float>(GameTime.Hours(gameTime));
-    this.m_minutes = Cast<Float>(GameTime.Minutes(gameTime));
+    this.ReadGameTime();
 
-    let weatherState: ref<worldWeatherState> = GameInstance.GetWeatherSystem(gi).GetWeatherState();
-    let stateName: String = IsDefined(weatherState) ? NameToString(weatherState.name) : "";
+    let stateName: String = this.ReadWeatherStateName();
+    this.m_displayWeatherState = stateName;
 
     if !Equals(this.m_state, stateName) {
       if Equals(this.m_lastState, "none") {
