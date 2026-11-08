@@ -283,15 +283,16 @@ function TryGetWeatherData()
     print("[AdaptiveTrafficHeadlights] Loading weather data from file or game systems")
     if not S.foundEnv then
         if Game.GetWeatherSystem():GetEnvironmentDefinition().path then
-            local path = Game.GetWeatherSystem():GetEnvironmentDefinition().path:ToString()
-            if path and not string.find(path:lower(), "v002") then
+            local path        = Game.GetWeatherSystem():GetEnvironmentDefinition().path
+                :ToString()
+            local pathLower   = path and path:lower()
+            local hasV002     = pathLower and string.find(pathLower, "v002", 1, true)
+            local hasNovaCity = pathLower and string.find(pathLower, "nova_city_master", 1, true)
+
+            if path and (not hasV002 or hasNovaCity) then
                 S.foundEnv = true
             else
                 table.insert(S.errors, ERROR_MESSAGES.INVALID_ENV)
-                table.insert(S.errors, path)
-                if not path then
-                    table.insert(S.errors, "no path???")
-                end
             end
         end
     end
@@ -412,7 +413,7 @@ registerForEvent('onInit', function()
 
             --shift the lights update logic to a delayed callback to increase compatibility with mods that do funky shenanigans with cycling appearances
             Cron.After(0.1, function()
-                if not IsDefined(vehicle)
+                if not IsDefined(vehicle) or not vehicle:IsAttached()
                     or not vehicle:GetVehicleComponent()
                     or not vehicle:GetVehicleComponent():GetVehicleController()
                 then

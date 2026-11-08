@@ -21,7 +21,9 @@ public class ATH_ApplyLightsCallback extends DelayCallback {
 public abstract class ATH_VehicleLights {
 
   public static func ApplyToVehicle(vehicle: wref<VehicleObject>) -> Void {
-    if !IsDefined(vehicle) {
+    // A detached vehicle (despawned/streamed out during the attach delay) can still be referenced, but its
+    // vehicleController has no owner entity, which Codeware's ToggleLights hook dereferences.
+    if !IsDefined(vehicle) || !vehicle.IsAttached() {
       return;
     }
     let vc: ref<vehicleController> = vehicle.GetAccessoryController();

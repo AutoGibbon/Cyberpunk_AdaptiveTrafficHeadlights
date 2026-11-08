@@ -50,10 +50,10 @@ function UI.drawHeader()
 		ImGui.Text(noDataLabel)
 	end
 
-	ImGui.Text("Hour: ")
+	ImGui.Text("Time: ")
 	ImGui.SameLine()
 	if S.gotWeatherStates then
-		ImGui.Text(tostring(S.hours))
+		ImGui.Text(string.format("%02d:%02d", S.hours, S.minutes))
 	else
 		ImGui.Text(noDataLabel)
 	end
